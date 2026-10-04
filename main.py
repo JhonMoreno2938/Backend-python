@@ -8,9 +8,7 @@ app = FastAPI()
 KEYCLOAK_URL = os.getenv("KEYCLOAK_URL", "http://192.168.0.107:8080")
 KEYCLOAK_REALM = os.getenv("KEYCLOAK_REALM", "master")
 CLIENT_ID = os.getenv("KEYCLOAK_CLIENT_ID", "backend-client")
-CLIENT_SECRET = os.getenv(
-    "KEYCLOAK_CLIENT_SECRET", "MFr17148BIMXKO1EeiSNW9EfKxRGN5X"
-)
+CLIENT_SECRET = os.getenv("KEYCLOAK_CLIENT_SECRET", "")
 
 
 class UserRegister(BaseModel):
@@ -20,15 +18,18 @@ class UserRegister(BaseModel):
 
 @app.post("/api/auth/register")
 def register_user(user: UserRegister):
-  # PASO 1: Obtener el token de administrador usando Client Credentials
-  token_url = f"{KEYCLOAK_URL}/realms/{KEYCLOAK_REALM}/protocol/openid-connect/token"
+  token_url = (
+      f"{KEYCLOAK_URL}/realms/{KEYCLOAK_REALM}/protocol/openid-connect/token"
+  )
+
+  # Para clientes confidenciales, Keycloak prefiere o requiere HTTP Basic Auth
   payload = {
-      "client_id": CLIENT_ID,
-      "client_secret": CLIENT_SECRET,
       "grant_type": "client_credentials",
   }
 
-  token_res = requests.post(token_url, data=payload)
+  token_res = requests.post(
+      token_url, data=payload, auth=(CLIENT_ID, CLIENT_SECRET)
+  )
 
   if token_res.status_code != 200:
     print(f"Error de Keycloak -> Status: {token_res.status_code}")
