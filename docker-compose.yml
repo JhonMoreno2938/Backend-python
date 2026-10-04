@@ -9,4 +9,4 @@ services:
       - KEYCLOAK_URL=http://192.168.0.107:8080
       - KEYCLOAK_REALM=master
       - KEYCLOAK_CLIENT_ID=backend-client
-      - KEYCLOAK_CLIENT_SECRET=MFr17148BIMXKO1EeiSNW9EfKxRGN5X
+      - KEYCLOAK_CLIENT_SECRET=ZwtmWq33FvwxxUP3XpCehjuK3evaY5pt
