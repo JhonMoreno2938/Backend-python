@@ -1,12 +1,12 @@
 version: '3.8'
 services:
   api-usuarios:
-        build: .
-        container_name: backend-python
-        ports:
-          - "8000:8000"
-        environment:
-          - KEYCLOAK_URL=http://keycloak:8080
-          - KEYCLOAK_REALM=master
-          - KEYCLOAK_ADMIN_USER=admin
-          - KEYCLOAK_ADMIN_PASS=mi_password_admin
+    build: .
+    container_name: backend-python
+    ports:
+      - "8000:8000"
+    environment:
+      - KEYCLOAK_URL=http://192.168.0.107:8080
+      - KEYCLOAK_REALM=master
+      - KEYCLOAK_ADMIN_USER=admin
+      - KEYCLOAK_ADMIN_PASS=tu_contraseña_real_de_keycloak
