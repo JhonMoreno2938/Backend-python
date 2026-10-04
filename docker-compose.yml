@@ -8,5 +8,5 @@ services:
     environment:
       - KEYCLOAK_URL=http://192.168.0.107:8080
       - KEYCLOAK_REALM=master
-      - KEYCLOAK_ADMIN_USER=admin
-      - KEYCLOAK_ADMIN_PASS=tu_contraseña_real_de_keycloak
+      - KEYCLOAK_CLIENT_ID=backend-client
+      - KEYCLOAK_CLIENT_SECRET=MFr17148BIMXKO1EeiSNW9EfKxRGN5X

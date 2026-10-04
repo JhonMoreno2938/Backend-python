@@ -5,11 +5,12 @@ from pydantic import BaseModel
 
 app = FastAPI()
 
-# Variables tomadas del entorno (configuradas en el docker-compose)
 KEYCLOAK_URL = os.getenv("KEYCLOAK_URL", "http://192.168.0.107:8080")
 KEYCLOAK_REALM = os.getenv("KEYCLOAK_REALM", "master")
-ADMIN_USER = os.getenv("KEYCLOAK_ADMIN_USER", "admin")
-ADMIN_PASS = os.getenv("KEYCLOAK_ADMIN_PASS", "mi_password_admin")
+CLIENT_ID = os.getenv("KEYCLOAK_CLIENT_ID", "backend-client")
+CLIENT_SECRET = os.getenv(
+    "KEYCLOAK_CLIENT_SECRET", "MFr17148BIMXKO1EeiSNW9EfKxRGN5X"
+)
 
 
 class UserRegister(BaseModel):
@@ -19,18 +20,16 @@ class UserRegister(BaseModel):
 
 @app.post("/api/auth/register")
 def register_user(user: UserRegister):
-  # PASO 1: Obtener el token de administrador de Keycloak
+  # PASO 1: Obtener el token de administrador usando Client Credentials
   token_url = f"{KEYCLOAK_URL}/realms/{KEYCLOAK_REALM}/protocol/openid-connect/token"
   payload = {
-      "client_id": "admin-cli",
-      "username": ADMIN_USER,
-      "password": ADMIN_PASS,
-      "grant_type": "password",
+      "client_id": CLIENT_ID,
+      "client_secret": CLIENT_SECRET,
+      "grant_type": "client_credentials",
   }
 
   token_res = requests.post(token_url, data=payload)
 
-  # Si falla la autenticación, imprimimos y devolvemos el error exacto de Keycloak en los logs
   if token_res.status_code != 200:
     print(f"Error de Keycloak -> Status: {token_res.status_code}")
     print(f"Respuesta de Keycloak: {token_res.text}")
