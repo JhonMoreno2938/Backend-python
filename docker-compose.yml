@@ -2,6 +2,7 @@ services:
   api-usuarios:
     build: .
     container_name: backend-python
+    restart: unless-stopped   # <--- Agrega esta línea aquí
     ports:
       - "8000:8000"
     environment:
