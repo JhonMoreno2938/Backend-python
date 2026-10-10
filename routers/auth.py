@@ -35,10 +35,6 @@ class UserUpdate(BaseModel):
   new_password: str
 
 
-class UserToggleStatus(BaseModel):
-  username: str
-
-
 # Función auxiliar para decodificar el payload de un JWT sin verificar firma
 def parse_jwt_payload(token: str):
   try:
@@ -130,11 +126,7 @@ def register_user(user: UserRegister):
         )
 
     # 6. Devolvemos la confirmación
-    return {
-        "message": "Usuario creado exitosamente en Keycloak",
-        "username": user.username,
-        "role": user.role,
-    }
+    return {"message": "Usuario creado exitosamente en Keycloak"}
 
 
 @router.post("/login")
@@ -189,13 +181,8 @@ def login_user(user: UserLogin):
     jwt_payload = parse_jwt_payload(access_token)
     realm_roles = jwt_payload.get("realm_access", {}).get("roles", [])
 
-    return {
-        "message": "Inicio de sesión exitoso",
-        "access_token": access_token,
-        "refresh_token": tokens.get("refresh_token"),
-        "expires_in": tokens.get("expires_in"),
-        "roles": realm_roles,
-    }
+    # 3. Devolvemos solo el mensaje de éxito
+    return {"message": "Inicio de sesión exitoso"}
 
 
 @router.put("/update-user")
@@ -251,10 +238,8 @@ def update_user(user: UserUpdate):
             detail=f"Error al actualizar la contraseña: {reset_res.text}",
         )
 
-    return {
-        "message": "Contraseña actualizada exitosamente",
-        "username": user.username,
-    }
+    # 4. Devolvemos solo el mensaje
+    return {"message": "Contraseña actualizada exitosamente"}
 
 
 @router.get("/events")
@@ -311,117 +296,6 @@ def get_keycloak_events():
     })
 
   return {"total_events": len(formatted_events), "events": formatted_events}
-
-
-@router.get("/users")
-def get_non_admin_users():
-    token_url = (
-        f"{KEYCLOAK_URL}/realms/{KEYCLOAK_REALM}/protocol/openid-connect/token"
-    )
-    payload = {"grant_type": "client_credentials"}
-    token_res = requests.post(
-        token_url, data=payload, auth=(CLIENT_ID, CLIENT_SECRET)
-    )
-
-    if token_res.status_code != 200:
-        raise HTTPException(
-            status_code=500, detail=f"Error Keycloak Auth: {token_res.text}"
-        )
-
-    access_token = token_res.json().get("access_token")
-    headers = {"Authorization": f"Bearer {access_token}"}
-
-    users_url = f"{KEYCLOAK_URL}/admin/realms/{KEYCLOAK_REALM}/users"
-    users_res = requests.get(users_url, headers=headers)
-
-    if users_res.status_code != 200:
-        raise HTTPException(
-            status_code=users_res.status_code,
-            detail=f"Error al obtener los usuarios: {users_res.text}",
-        )
-
-    all_users = users_res.json()
-    non_admin_users = []
-
-    for user in all_users:
-        user_id = user.get("id")
-        username = user.get("username")
-
-        roles_url = f"{KEYCLOAK_URL}/admin/realms/{KEYCLOAK_REALM}/users/{user_id}/role-mappings/realm"
-        roles_res = requests.get(roles_url, headers=headers)
-
-        is_admin = False
-        if roles_res.status_code == 200:
-            realm_roles = roles_res.json()
-            is_admin = any(
-                role.get("name") in ["admin", "administrador_junta"] 
-                for role in realm_roles
-            )
-
-        if not is_admin:
-            is_enabled = user.get("enabled", True)
-            status_str = "Activo" if is_enabled else "Inactivo"
-
-            non_admin_users.append({
-                "username": username,
-                "status": status_str,
-            })
-
-    return {
-        "total_users": len(non_admin_users),
-        "users": non_admin_users
-    }
-
-
-@router.put("/toggle-status")
-def toggle_user_status(user: UserToggleStatus):
-  token_url = (
-      f"{KEYCLOAK_URL}/realms/{KEYCLOAK_REALM}/protocol/openid-connect/token"
-  )
-  payload = {"grant_type": "client_credentials"}
-  token_res = requests.post(
-      token_url, data=payload, auth=(CLIENT_ID, CLIENT_SECRET)
-  )
-
-  if token_res.status_code != 200:
-    raise HTTPException(
-        status_code=500, detail=f"Error Keycloak Auth: {token_res.text}"
-    )
-
-  access_token = token_res.json().get("access_token")
-  headers = {
-      "Authorization": f"Bearer {access_token}",
-      "Content-Type": "application/json",
-  }
-
-  search_user_url = f"{KEYCLOAK_URL}/admin/realms/{KEYCLOAK_REALM}/users?username={user.username}&exact=true"
-  search_res = requests.get(search_user_url, headers=headers)
-
-  if search_res.status_code != 200 or not search_res.json():
-    raise HTTPException(status_code=404, detail="Usuario no encontrado")
-
-  user_data = search_res.json()[0]
-  user_id = user_data["id"]
-  current_status = user_data.get("enabled", True)
-
-  new_status = not current_status
-
-  update_url = f"{KEYCLOAK_URL}/admin/realms/{KEYCLOAK_REALM}/users/{user_id}"
-  update_payload = {"enabled": new_status}
-
-  update_res = requests.put(update_url, json=update_payload, headers=headers)
-
-  if update_res.status_code == 204:
-    status_text = "activado" if new_status else "desactivado"
-    return {
-        "message": f"Usuario {user.username} {status_text} exitosamente",
-        "enabled": new_status,
-    }
-  else:
-    raise HTTPException(
-        status_code=update_res.status_code,
-        detail=f"Error al cambiar el estado del usuario: {update_res.text}",
-    )
 
 
 @router.get("/roles", response_model=list[str])
