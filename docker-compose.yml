@@ -2,11 +2,11 @@ services:
   api-usuarios:
     build: .
     container_name: backend-python
-    restart: unless-stopped   # <--- Agrega esta línea aquí
+    restart: unless-stopped
     ports:
       - "8000:8000"
     environment:
-      - KEYCLOAK_URL=http://192.168.0.107:8080
-      - KEYCLOAK_REALM=master
-      - KEYCLOAK_CLIENT_ID=backend-client
-      - KEYCLOAK_CLIENT_SECRET=ZwtmWq33FvwxxUP3XpCehjuK3evaY5pt
+      - KEYCLOAK_URL=http://192.168.0.103:8080
+      - KEYCLOAK_REALM=prueba
+      - KEYCLOAK_CLIENT_ID=api-python
+      - KEYCLOAK_CLIENT_SECRET=mKpUdtdqjXPxVxZtMdq53PGkTUHrjIlw

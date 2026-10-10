@@ -7,20 +7,23 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# Configuración de CORS para permitir peticiones desde el frontend y navegadores
+# Configuración de CORS
+# Solo el frontend hace peticiones a esta API
 origins = [
-    "http://192.168.0.107",
-    "http://localhost",
+    "http://192.168.0.103",          # Frontend
+    "http://192.168.0.103:80",       # Frontend en puerto 80
+    "http://192.168.0.103:8000",     # La propia API (para Swagger /docs)
+    "http://localhost",              # Para desarrollo local
     "http://localhost:80",
-    "*",  # Permite cualquier origen (muy útil para desarrollo y pruebas en red local)
+    "http://localhost:8000",
 ]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["*"],  # Permite todos los métodos (GET, POST, PUT, DELETE, OPTIONS)
-    allow_headers=["*"],  # Permite todos los headers (Content-Type, Authorization, etc.)
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Incluimos las rutas de autenticación

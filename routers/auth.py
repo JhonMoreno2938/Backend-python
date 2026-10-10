@@ -9,17 +9,20 @@ from pydantic import BaseModel
 # 1. Definimos el router al inicio
 router = APIRouter(prefix="/api/auth", tags=["Autenticación"])
 
-KEYCLOAK_URL = os.getenv("KEYCLOAK_URL", "http://192.168.0.107:8080")
-KEYCLOAK_REALM = os.getenv("KEYCLOAK_REALM", "master")
-CLIENT_ID = os.getenv("KEYCLOAK_CLIENT_ID", "backend-client")
+# 👇 CONFIGURACIÓN ACTUALIZADA AL NUEVO SERVIDOR Y REALM 👇
+KEYCLOAK_URL = os.getenv("KEYCLOAK_URL", "http://192.168.0.103:8080")
+KEYCLOAK_REALM = os.getenv("KEYCLOAK_REALM", "prueba")
+CLIENT_ID = os.getenv("KEYCLOAK_CLIENT_ID", "api-python")
 CLIENT_SECRET = os.getenv(
-    "KEYCLOAK_CLIENT_SECRET", "ZwtmWq33FvwxxUP3XpCehjuK3evaY5pt"
+    "KEYCLOAK_CLIENT_SECRET", "mKpUdtdqjXPxVxZtMdq53PGkTUHrjIlw"
 )
+# 👆 FIN DE LA CONFIGURACIÓN ACTUALIZADA 👆
 
 
 class UserRegister(BaseModel):
   username: str
   password: str
+  role: str
 
 
 class UserLogin(BaseModel):
@@ -49,43 +52,90 @@ def parse_jwt_payload(token: str):
 
 @router.post("/register")
 def register_user(user: UserRegister):
-  token_url = (
-      f"{KEYCLOAK_URL}/realms/{KEYCLOAK_REALM}/protocol/openid-connect/token"
-  )
-  payload = {"grant_type": "client_credentials"}
+    # 1. Obtenemos un token de administrador
+    token_url = (
+        f"{KEYCLOAK_URL}/realms/{KEYCLOAK_REALM}/protocol/openid-connect/token"
+    )
+    payload = {"grant_type": "client_credentials"}
+    token_res = requests.post(
+        token_url, data=payload, auth=(CLIENT_ID, CLIENT_SECRET)
+    )
+    if token_res.status_code != 200:
+        raise HTTPException(
+            status_code=500, detail=f"Error Keycloak Auth: {token_res.text}"
+        )
 
-  token_res = requests.post(
-      token_url, data=payload, auth=(CLIENT_ID, CLIENT_SECRET)
-  )
-  if token_res.status_code != 200:
-    raise HTTPException(
-        status_code=500, detail=f"Error Keycloak Auth: {token_res.text}"
+    access_token = token_res.json().get("access_token")
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json",
+    }
+
+    # 2. Creamos el usuario en Keycloak
+    create_user_url = f"{KEYCLOAK_URL}/admin/realms/{KEYCLOAK_REALM}/users"
+    user_data = {
+        "username": user.username,
+        "enabled": True,
+        "credentials": [
+            {"type": "password", "value": user.password, "temporary": False}
+        ],
+    }
+
+    create_res = requests.post(
+        create_user_url, json=user_data, headers=headers
     )
 
-  access_token = token_res.json().get("access_token")
-  create_user_url = f"{KEYCLOAK_URL}/admin/realms/{KEYCLOAK_REALM}/users"
-  headers = {
-      "Authorization": f"Bearer {access_token}",
-      "Content-Type": "application/json",
-  }
-  user_data = {
-      "username": user.username,
-      "enabled": True,
-      "credentials": [
-          {"type": "password", "value": user.password, "temporary": False}
-      ],
-  }
+    if create_res.status_code != 201:
+        raise HTTPException(
+            status_code=create_res.status_code,
+            detail=f"Error al crear usuario en Keycloak: {create_res.text}",
+        )
 
-  create_res = requests.post(
-      create_user_url, json=user_data, headers=headers
-  )
-  if create_res.status_code == 201:
-    return {"message": "Usuario creado exitosamente en Keycloak"}
-  else:
-    raise HTTPException(
-        status_code=create_res.status_code,
-        detail=f"Error al crear usuario en Keycloak: {create_res.text}",
+    # 3. Obtenemos el ID del usuario recién creado
+    search_user_url = f"{KEYCLOAK_URL}/admin/realms/{KEYCLOAK_REALM}/users?username={user.username}&exact=true"
+    search_res = requests.get(search_user_url, headers=headers)
+
+    if search_res.status_code != 200 or not search_res.json():
+        raise HTTPException(
+            status_code=500,
+            detail="Usuario creado pero no se pudo obtener su ID.",
+        )
+
+    user_id = search_res.json()[0]["id"]
+
+    # 4. Obtenemos los detalles del rol (para tener su ID)
+    role_url = f"{KEYCLOAK_URL}/admin/realms/{KEYCLOAK_REALM}/roles/{user.role}"
+    role_res = requests.get(role_url, headers=headers)
+
+    if role_res.status_code != 200:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Rol '{user.role}' no encontrado en Keycloak.",
+        )
+
+    role_data = role_res.json()
+
+    # 5. Asignamos el rol al usuario
+    assign_url = (
+        f"{KEYCLOAK_URL}/admin/realms/{KEYCLOAK_REALM}/users/{user_id}/role-mappings/realm"
     )
+    assign_res = requests.post(
+        assign_url, json=[role_data], headers=headers
+    )
+
+    if assign_res.status_code != 204:
+        raise HTTPException(
+            status_code=assign_res.status_code,
+            detail=f"Usuario creado pero falló al asignar el rol: {assign_res.text}",
+        )
+
+    # 6. Devolvemos la confirmación
+    return {
+        "message": "Usuario creado exitosamente en Keycloak",
+        "username": user.username,
+        "role": user.role,
+    }
+
 
 @router.post("/login")
 def login_user(user: UserLogin):
@@ -146,6 +196,7 @@ def login_user(user: UserLogin):
         "expires_in": tokens.get("expires_in"),
         "roles": realm_roles,
     }
+
 
 @router.put("/update-password")
 def update_password(user: UserUpdatePassword):
@@ -219,16 +270,8 @@ def get_keycloak_events():
     )
 
   access_token = token_res.json().get("access_token")
-
-  # Consultamos las sesiones activas directamente para que coincida con la vista web de Sessions
-  sessions_url = (
-      f"{KEYCLOAK_URL}/admin/realms/{KEYCLOAK_REALM}/client-session-stats"
-  )
   headers = {"Authorization": f"Bearer {access_token}"}
 
-  # Como alternativa más directa para listar las sesiones completas de usuario:
-  # Keycloak provee el endpoint /admin/realms/{realm}/sessions o user sessions.
-  # Usaremos el endpoint general de eventos filtrando solo los LOGIN exitosos o consultando la API de client-session-stats.
   events_url = f"{KEYCLOAK_URL}/admin/realms/{KEYCLOAK_REALM}/events"
   params = {"type": "LOGIN", "max": 20}
 
@@ -253,7 +296,6 @@ def get_keycloak_events():
         else None
     )
 
-    # Extraemos el nombre de usuario desde los detalles del evento
     details = ev.get("details", {})
     username = details.get("username", "Desconocido")
 
@@ -265,6 +307,7 @@ def get_keycloak_events():
     })
 
   return {"total_events": len(formatted_events), "events": formatted_events}
+
 
 @router.get("/users")
 def get_non_admin_users():
@@ -284,7 +327,6 @@ def get_non_admin_users():
     access_token = token_res.json().get("access_token")
     headers = {"Authorization": f"Bearer {access_token}"}
 
-    # 1. Obtenemos todos los usuarios del realm
     users_url = f"{KEYCLOAK_URL}/admin/realms/{KEYCLOAK_REALM}/users"
     users_res = requests.get(users_url, headers=headers)
 
@@ -301,19 +343,17 @@ def get_non_admin_users():
         user_id = user.get("id")
         username = user.get("username")
 
-        # 2. Consultamos los roles asignados a cada usuario para verificar si es admin
         roles_url = f"{KEYCLOAK_URL}/admin/realms/{KEYCLOAK_REALM}/users/{user_id}/role-mappings/realm"
         roles_res = requests.get(roles_url, headers=headers)
 
         is_admin = False
         if roles_res.status_code == 200:
             realm_roles = roles_res.json()
-            # Verificamos si alguno de los roles es 'admin'
             is_admin = any(
                 role.get("name") in ["admin", "administrador_junta"] 
                 for role in realm_roles
             )
-        # Si NO es admin, lo agregamos a nuestra lista con su estado
+
         if not is_admin:
             is_enabled = user.get("enabled", True)
             status_str = "Activo" if is_enabled else "Inactivo"
@@ -327,6 +367,7 @@ def get_non_admin_users():
         "total_users": len(non_admin_users),
         "users": non_admin_users
     }
+
 
 @router.put("/toggle-status")
 def toggle_user_status(user: UserToggleStatus):
@@ -349,7 +390,6 @@ def toggle_user_status(user: UserToggleStatus):
       "Content-Type": "application/json",
   }
 
-  # 1. Buscamos al usuario por su nombre de usuario para obtener su ID
   search_user_url = f"{KEYCLOAK_URL}/admin/realms/{KEYCLOAK_REALM}/users?username={user.username}&exact=true"
   search_res = requests.get(search_user_url, headers=headers)
 
@@ -360,10 +400,8 @@ def toggle_user_status(user: UserToggleStatus):
   user_id = user_data["id"]
   current_status = user_data.get("enabled", True)
 
-  # 2. Invertimos el estado actual (si está True pasa a False, y viceversa)
   new_status = not current_status
 
-  # 3. Actualizamos el estado en Keycloak
   update_url = f"{KEYCLOAK_URL}/admin/realms/{KEYCLOAK_REALM}/users/{user_id}"
   update_payload = {"enabled": new_status}
 
@@ -380,3 +418,44 @@ def toggle_user_status(user: UserToggleStatus):
         status_code=update_res.status_code,
         detail=f"Error al cambiar el estado del usuario: {update_res.text}",
     )
+
+
+@router.get("/roles", response_model=list[str])
+def get_roles_with_access():
+    """
+    Retorna una lista con los nombres de los roles del Realm
+    que tengan la palabra "Acceso" en su descripción.
+    """
+    token_url = (
+        f"{KEYCLOAK_URL}/realms/{KEYCLOAK_REALM}/protocol/openid-connect/token"
+    )
+    payload = {"grant_type": "client_credentials"}
+    token_res = requests.post(
+        token_url, data=payload, auth=(CLIENT_ID, CLIENT_SECRET)
+    )
+
+    if token_res.status_code != 200:
+        raise HTTPException(
+            status_code=500, detail=f"Error Keycloak Auth: {token_res.text}"
+        )
+
+    access_token = token_res.json().get("access_token")
+    headers = {"Authorization": f"Bearer {access_token}"}
+
+    roles_url = f"{KEYCLOAK_URL}/admin/realms/{KEYCLOAK_REALM}/roles"
+    roles_res = requests.get(roles_url, headers=headers)
+
+    if roles_res.status_code != 200:
+        raise HTTPException(
+            status_code=roles_res.status_code,
+            detail=f"Error al obtener los roles: {roles_res.text}",
+        )
+
+    all_roles = roles_res.json()
+    names = [
+        role["name"]
+        for role in all_roles
+        if "Acceso" in role.get("description", "")
+    ]
+
+    return names
