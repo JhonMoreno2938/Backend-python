@@ -30,7 +30,7 @@ class UserLogin(BaseModel):
   password: str
 
 
-class UserUpdatePassword(BaseModel):
+class UserUpdate(BaseModel):
   username: str
   new_password: str
 
@@ -198,59 +198,63 @@ def login_user(user: UserLogin):
     }
 
 
-@router.put("/update-password")
-def update_password(user: UserUpdatePassword):
-  token_url = (
-      f"{KEYCLOAK_URL}/realms/{KEYCLOAK_REALM}/protocol/openid-connect/token"
-  )
-
-  payload = {"grant_type": "client_credentials"}
-  token_res = requests.post(
-      token_url, data=payload, auth=(CLIENT_ID, CLIENT_SECRET)
-  )
-
-  if token_res.status_code != 200:
-    raise HTTPException(
-        status_code=500, detail=f"Error Keycloak Auth: {token_res.text}"
+@router.put("/update-user")
+def update_user(user: UserUpdate):
+    """
+    Actualiza la contraseña de un usuario existente en Keycloak.
+    """
+    # 1. Obtenemos un token de administrador
+    token_url = (
+        f"{KEYCLOAK_URL}/realms/{KEYCLOAK_REALM}/protocol/openid-connect/token"
+    )
+    payload = {"grant_type": "client_credentials"}
+    token_res = requests.post(
+        token_url, data=payload, auth=(CLIENT_ID, CLIENT_SECRET)
     )
 
-  access_token = token_res.json().get("access_token")
+    if token_res.status_code != 200:
+        raise HTTPException(
+            status_code=500, detail=f"Error Keycloak Auth: {token_res.text}"
+        )
 
-  search_user_url = f"{KEYCLOAK_URL}/admin/realms/{KEYCLOAK_REALM}/users?username={user.username}&exact=true"
-  headers = {"Authorization": f"Bearer {access_token}"}
+    access_token = token_res.json().get("access_token")
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json",
+    }
 
-  search_res = requests.get(search_user_url, headers=headers)
+    # 2. Buscamos al usuario por su username
+    search_user_url = f"{KEYCLOAK_URL}/admin/realms/{KEYCLOAK_REALM}/users?username={user.username}&exact=true"
+    search_res = requests.get(search_user_url, headers=headers)
 
-  if search_res.status_code != 200 or not search_res.json():
-    raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    if search_res.status_code != 200 or not search_res.json():
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
 
-  user_id = search_res.json()[0]["id"]
+    user_id = search_res.json()[0]["id"]
 
-  reset_password_url = (
-      f"{KEYCLOAK_URL}/admin/realms/{KEYCLOAK_REALM}/users/{user_id}/reset-password"
-  )
-  reset_headers = {
-      "Authorization": f"Bearer {access_token}",
-      "Content-Type": "application/json",
-  }
-
-  credential_data = {
-      "type": "password",
-      "value": user.new_password,
-      "temporary": False,
-  }
-
-  reset_res = requests.put(
-      reset_password_url, json=credential_data, headers=reset_headers
-  )
-
-  if reset_res.status_code == 204:
-    return {"message": "Contraseña actualizada exitosamente en Keycloak"}
-  else:
-    raise HTTPException(
-        status_code=reset_res.status_code,
-        detail=f"Error al actualizar la contraseña: {reset_res.text}",
+    # 3. Actualizamos la contraseña
+    reset_password_url = (
+        f"{KEYCLOAK_URL}/admin/realms/{KEYCLOAK_REALM}/users/{user_id}/reset-password"
     )
+    credential_data = {
+        "type": "password",
+        "value": user.new_password,
+        "temporary": False,
+    }
+    reset_res = requests.put(
+        reset_password_url, json=credential_data, headers=headers
+    )
+
+    if reset_res.status_code != 204:
+        raise HTTPException(
+            status_code=reset_res.status_code,
+            detail=f"Error al actualizar la contraseña: {reset_res.text}",
+        )
+
+    return {
+        "message": "Contraseña actualizada exitosamente",
+        "username": user.username,
+    }
 
 
 @router.get("/events")
