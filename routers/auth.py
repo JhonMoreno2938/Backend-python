@@ -81,20 +81,13 @@ def register_user(user: UserRegister):
         create_user_url, json=user_data, headers=headers
     )
 
-    # 3. Manejo de errores al crear el usuario
-    if create_res.status_code == 409:
-        # Keycloak devuelve 409 Conflict si el usuario ya existe
-        raise HTTPException(
-            status_code=409,
-            detail="El nombre de usuario ya está en uso. Prueba con otro.",
-        )
-    elif create_res.status_code != 201:
+    if create_res.status_code != 201:
         raise HTTPException(
             status_code=create_res.status_code,
             detail=f"Error al crear usuario en Keycloak: {create_res.text}",
         )
 
-    # 4. Obtenemos el ID del usuario recién creado
+    # 3. Obtenemos el ID del usuario recién creado
     search_user_url = f"{KEYCLOAK_URL}/admin/realms/{KEYCLOAK_REALM}/users?username={user.username}&exact=true"
     search_res = requests.get(search_user_url, headers=headers)
 
@@ -106,7 +99,7 @@ def register_user(user: UserRegister):
 
     user_id = search_res.json()[0]["id"]
 
-    # 5. Obtenemos los detalles del rol (para tener su ID)
+    # 4. Obtenemos los detalles del rol (para tener su ID)
     role_url = f"{KEYCLOAK_URL}/admin/realms/{KEYCLOAK_REALM}/roles/{user.role}"
     role_res = requests.get(role_url, headers=headers)
 
@@ -118,7 +111,7 @@ def register_user(user: UserRegister):
 
     role_data = role_res.json()
 
-    # 6. Asignamos el rol al usuario
+    # 5. Asignamos el rol al usuario
     assign_url = (
         f"{KEYCLOAK_URL}/admin/realms/{KEYCLOAK_REALM}/users/{user_id}/role-mappings/realm"
     )
@@ -132,7 +125,7 @@ def register_user(user: UserRegister):
             detail=f"Usuario creado pero falló al asignar el rol: {assign_res.text}",
         )
 
-    # 7. Devolvemos la confirmación
+    # 6. Devolvemos la confirmación
     return {"message": "Usuario creado exitosamente en Keycloak"}
 
 
