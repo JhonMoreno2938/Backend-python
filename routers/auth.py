@@ -81,13 +81,19 @@ def register_user(user: UserRegister):
         create_user_url, json=user_data, headers=headers
     )
 
-    if create_res.status_code != 201:
+    # 3. Manejo de errores al crear el usuario
+    if create_res.status_code == 409:
+        raise HTTPException(
+            status_code=409,
+            detail="El nombre de usuario ya está en uso. Prueba con otro.",
+        )
+    elif create_res.status_code != 201:
         raise HTTPException(
             status_code=create_res.status_code,
             detail=f"Error al crear usuario en Keycloak: {create_res.text}",
         )
 
-    # 3. Obtenemos el ID del usuario recién creado
+    # 4. Obtenemos el ID del usuario recién creado
     search_user_url = f"{KEYCLOAK_URL}/admin/realms/{KEYCLOAK_REALM}/users?username={user.username}&exact=true"
     search_res = requests.get(search_user_url, headers=headers)
 
@@ -99,7 +105,7 @@ def register_user(user: UserRegister):
 
     user_id = search_res.json()[0]["id"]
 
-    # 4. Obtenemos los detalles del rol (para tener su ID)
+    # 5. Obtenemos los detalles del rol (para tener su ID)
     role_url = f"{KEYCLOAK_URL}/admin/realms/{KEYCLOAK_REALM}/roles/{user.role}"
     role_res = requests.get(role_url, headers=headers)
 
@@ -111,7 +117,7 @@ def register_user(user: UserRegister):
 
     role_data = role_res.json()
 
-    # 5. Asignamos el rol al usuario
+    # 6. Asignamos el rol al usuario
     assign_url = (
         f"{KEYCLOAK_URL}/admin/realms/{KEYCLOAK_REALM}/users/{user_id}/role-mappings/realm"
     )
@@ -125,7 +131,7 @@ def register_user(user: UserRegister):
             detail=f"Usuario creado pero falló al asignar el rol: {assign_res.text}",
         )
 
-    # 6. Devolvemos la confirmación
+    # 7. Devolvemos la confirmación
     return {"message": "Usuario creado exitosamente en Keycloak"}
 
 
@@ -181,8 +187,14 @@ def login_user(user: UserLogin):
     jwt_payload = parse_jwt_payload(access_token)
     realm_roles = jwt_payload.get("realm_access", {}).get("roles", [])
 
-    # 3. Devolvemos solo el mensaje de éxito
-    return {"message": "Inicio de sesión exitoso"}
+    # 3. Devolvemos el token Y los roles
+    return {
+        "message": "Inicio de sesión exitoso",
+        "access_token": access_token,
+        "refresh_token": tokens.get("refresh_token"),
+        "expires_in": tokens.get("expires_in"),
+        "roles": realm_roles,
+    }
 
 
 @router.put("/update-user")
@@ -238,8 +250,11 @@ def update_user(user: UserUpdate):
             detail=f"Error al actualizar la contraseña: {reset_res.text}",
         )
 
-    # 4. Devolvemos solo el mensaje
-    return {"message": "Contraseña actualizada exitosamente"}
+    # 4. Devolvemos el mensaje con el username
+    return {
+        "message": "Contraseña actualizada exitosamente",
+        "username": user.username,
+    }
 
 
 @router.get("/events")
