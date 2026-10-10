@@ -68,10 +68,14 @@ def register_user(user: UserRegister):
     }
 
     # 2. Creamos el usuario en Keycloak
+    #    - Le generamos un email automático (usuario@test.com)
+    #    - Lo marcamos como verificado para que Keycloak no exija verificación
     create_user_url = f"{KEYCLOAK_URL}/admin/realms/{KEYCLOAK_REALM}/users"
     user_data = {
         "username": user.username,
         "enabled": True,
+        "email": f"{user.username}@test.com",
+        "emailVerified": True,
         "credentials": [
             {"type": "password", "value": user.password, "temporary": False}
         ],
