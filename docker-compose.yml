@@ -6,7 +6,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - KEYCLOAK_URL=http://192.168.0.103:8080
+      - KEYCLOAK_URL=http://192.168.0.101:8080
       - KEYCLOAK_REALM=prueba
       - KEYCLOAK_CLIENT_ID=api-python
       - KEYCLOAK_CLIENT_SECRET=mKpUdtdqjXPxVxZtMdq53PGkTUHrjIlw

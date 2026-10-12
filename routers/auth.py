@@ -10,7 +10,7 @@ from pydantic import BaseModel
 router = APIRouter(prefix="/api/auth", tags=["Autenticación"])
 
 # 👇 CONFIGURACIÓN ACTUALIZADA AL NUEVO SERVIDOR Y REALM 👇
-KEYCLOAK_URL = os.getenv("KEYCLOAK_URL", "http://192.168.0.103:8080")
+KEYCLOAK_URL = os.getenv("KEYCLOAK_URL", "http://192.168.0.101:8080")
 KEYCLOAK_REALM = os.getenv("KEYCLOAK_REALM", "prueba")
 CLIENT_ID = os.getenv("KEYCLOAK_CLIENT_ID", "api-python")
 CLIENT_SECRET = os.getenv(

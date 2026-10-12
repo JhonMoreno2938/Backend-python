@@ -10,9 +10,9 @@ app = FastAPI(
 # Configuración de CORS
 # Solo el frontend hace peticiones a esta API
 origins = [
-    "http://192.168.0.103",          # Frontend
-    "http://192.168.0.103:8081",       # Frontend en puerto 80
-    "http://192.168.0.103:8000",     # La propia API (para Swagger /docs)
+    "http://192.168.0.101",          # Frontend
+    "http://192.168.0.101:8081",       # Frontend en puerto 80
+    "http://192.168.0.101:8000",     # La propia API (para Swagger /docs)
     "http://localhost",              # Para desarrollo local
     "http://localhost:80",
     "http://localhost:8000",
